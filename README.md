@@ -1,64 +1,45 @@
-# NDP Proxy — שרת ביניים לנדרים פלוס
+# NDP Proxy — שרת ביניים לנדרים פלוס (Netlify)
 
-שרת קטן (Vercel Serverless Function) שמטרתו לעקוף את חסימת ה-CORS של נדרים פלוס,
-כדי שאתר ניהול בית הכנסת יוכל להתחבר אליהם ישירות מהדפדפן.
-
-## איך זה עובד
-
-```
-הדפדפן שלך  →  השרת הזה (Vercel)  →  נדרים פלוס  →  השרת הזה  →  הדפדפן שלך
-```
-
-הדפדפן לא יכול לדבר ישירות עם נדרים פלוס (הם חוסמים CORS), אבל שרת-לשרת
-אין שום בעיה. ה-proxy הזה פשוט "מעביר" את הבקשה והתשובה.
+שרת קטן (Netlify Function) שמטרתו לעקוף את חסימת ה-CORS של נדרים פלוס,
+כדי שאתר ניהול בית הכנסת יוכל להתחבר אליהם.
 
 ## פריסה (Deploy) — שלב אחר שלב
 
 ### 1. יצירת ריפו ב-GitHub
-1. כנס ל-https://github.com/new
-2. תן שם לריפו, למשל `ndp-proxy`
-3. צור אותו (לא חובה Public — אפשר גם Private)
-4. העלה אליו את כל הקבצים מהתיקייה הזו (גרור ל-GitHub או דרך git):
+אם כבר יש לך ריפו מהניסיון הקודם (Vercel) — אפשר להשתמש בו, רק תמחק את
+התיקייה `api` ותעלה במקומה את התיקיות והקבצים מהזיפ הזה (`netlify`, `netlify.toml`, `package.json`).
 
-```bash
-cd ndp-proxy
-git init
-git add .
-git commit -m "NDP proxy server"
-git branch -M main
-git remote add origin https://github.com/USERNAME/ndp-proxy.git
-git push -u origin main
+אם אתה מתחיל מאפס:
+1. כנס ל-https://github.com/new וצור ריפו חדש
+2. לחץ "uploading an existing file" / "העלאת קובץ קיים"
+3. גרור לשם את כל התוכן מהזיפ הזה (כולל תיקיית `netlify/functions`)
+4. Commit changes
+
+### 2. חיבור ל-Netlify
+1. כנס ל-https://app.netlify.com
+2. הירשם/התחבר עם **GitHub** (לא צריך אימות טלפון בדרך כלל)
+3. לחץ "Add new site" → "Import an existing project"
+4. בחר "Deploy with GitHub" ואשר את ההרשאות
+5. בחר את הריפו שלך מהרשימה
+6. השאר את ההגדרות כברירת מחדל ולחץ "Deploy"
+7. תוך דקה תקבל כתובת כמו: `https://random-name-12345.netlify.app`
+
+### 3. כתובת ה-API שלך
+```
+https://random-name-12345.netlify.app/.netlify/functions/nedarim
 ```
 
-### 2. חיבור ל-Vercel
-1. כנס ל-https://vercel.com והתחבר עם GitHub
-2. לחץ "Add New Project"
-3. בחר את הריפו `ndp-proxy`
-4. השאר את כל ההגדרות כברירת מחדל ולחץ "Deploy"
-5. תוך כדקה תקבל URL כמו: `https://ndp-proxy-xxxx.vercel.app`
+⚠️ שים לב: אצל Netlify הנתיב הוא `/.netlify/functions/nedarim` ולא `/api/nedarim` כמו ב-Vercel.
 
-### 3. עדכון הקוד באתר שלך
-כתובת ה-API שלך תהיה:
+שלח לי את הכתובת המלאה שקיבלת ואני אעדכן את הקוד באתר שלך.
+
+## בדיקה מהירה
+אחרי הפריסה, אפשר לבדוק שהשרת חי על ידי כניסה לכתובת:
 ```
-https://ndp-proxy-xxxx.vercel.app/api/nedarim
+https://random-name-12345.netlify.app/.netlify/functions/nedarim
 ```
+(בדפדפן רגיל — אמורה לחזור שגיאת "רק בקשות POST מותרות", זה תקין וסימן שהפונקציה פעילה)
 
-צריך להחליף בקובץ `nisul-beit-knesset.html` את הקריאה הישירה לנדרים פלוס
-בקריאה דרך ה-proxy (שלח לי את כתובת ה-Vercel שתקבל ואני אעדכן את הקוד באתר).
-
-## בדיקה מקומית (אופציונלי)
-
-אם יש לך Node.js מותקן ורוצה לבדוק לפני הפריסה:
-
-```bash
-npm install -g vercel
-vercel dev
-```
-
-זה ירוץ על `http://localhost:3000/api/nedarim`
-
-## אבטחה — חשוב לדעת
-
-- מספר הקופה והסיסמה **עוברים דרך השרת** אבל **לא נשמרים** בו — הם רק "עוברים דרכו" לכיוון נדרים פלוס ולא מאוחסנים בשום מקום.
-- מומלץ בעתיד להגביל את `Access-Control-Allow-Origin` בקובץ `api/nedarim.js` לדומיין של האתר שלך בלבד (במקום `*`), כדי שאף אחד אחר לא יוכל להשתמש בשרת שלך.
-- כדאי לשקול הגבלת קצב בקשות (rate limiting) אם תרצה הגנה נוספת.
+## אבטחה
+- מספר הקופה והסיסמה עוברים דרך השרת אך לא נשמרים בו.
+- מומלץ בעתיד להגביל את `Access-Control-Allow-Origin` בקובץ `netlify/functions/nedarim.js` לדומיין של האתר שלך בלבד.
