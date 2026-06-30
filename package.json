@@ -2,5 +2,8 @@
   "name": "ndp-proxy-netlify",
   "version": "1.0.0",
   "private": true,
-  "description": "Proxy server לחיבור בין אתר ניהול בית הכנסת לבין נדרים פלוס (עוקף CORS) — Netlify"
+  "description": "Proxy server + שידור חוזר אוטומטי לחיבור בין אתר ניהול בית הכנסת לבין נדרים פלוס — Netlify + Supabase",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  }
 }
