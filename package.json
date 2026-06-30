@@ -1,0 +1,6 @@
+{
+  "name": "ndp-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Proxy server לחיבור בין אתר ניהול בית הכנסת לבין נדרים פלוס (עוקף CORS)"
+}

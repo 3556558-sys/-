@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/nedarim.js": {
+      "maxDuration": 10
+    }
+  }
+}
