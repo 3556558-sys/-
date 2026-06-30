@@ -1,16 +1,21 @@
 // netlify/functions/nedarim.js
 // Proxy server עבור נדרים פלוס — עוקף בעיית CORS
 // פועל כ-Netlify Function
+//
+// מבוסס על התיעוד הרשמי של נדרים פלוס:
+// GET https://matara.pro/nedarimplus/Reports/Manage3.aspx
+// Action=GetKevaNew — משיכת כל ההוראות קבע (אשראי) + סיכומים חודשיים
+//
+// שימו לב: ApiPassword הוא קוד אימות ייעודי ל-API שיש לבקש ממשרד נדרים פלוס
+// (office@nedar.im) — הוא שונה מהסיסמה הרגילה להתחברות לקופה!
 
 exports.handler = async (event) => {
-  // אפשור CORS
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 
-  // בקשת preflight של הדפדפן
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
   }
@@ -24,31 +29,24 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { mosadId, apiValid, task } = JSON.parse(event.body || '{}');
+    const { mosadNumber, apiPassword } = JSON.parse(event.body || '{}');
 
-    if (!mosadId || !apiValid) {
+    if (!mosadNumber || !apiPassword) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: 'חסר מספר קופה או סיסמה' }),
+        body: JSON.stringify({ error: 'חסר מספר מוסד או סיסמת API' }),
       };
     }
 
-    // בניית הבקשה לנדרים פלוס
-    const params = new URLSearchParams();
-    params.append('MosadId', mosadId);
-    params.append('ApiValid', apiValid);
-    params.append('Task', task || 'GetAllActiveDD');
+    const url = new URL('https://matara.pro/nedarimplus/Reports/Manage3.aspx');
+    url.searchParams.append('Action', 'GetKevaNew');
+    url.searchParams.append('MosadNumber', mosadNumber);
+    url.searchParams.append('ApiPassword', apiPassword);
 
-    const ndpResponse = await fetch('https://www.matara.pro/nedarimplus/online/api.aspx', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString(),
-    });
-
+    const ndpResponse = await fetch(url.toString(), { method: 'GET' });
     const text = await ndpResponse.text();
 
-    // נדרים פלוס מחזירים לפעמים JSON ולפעמים XML/טקסט תלוי בהגדרות הקופה
     let data;
     try {
       data = JSON.parse(text);
