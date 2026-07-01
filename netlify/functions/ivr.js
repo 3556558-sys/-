@@ -173,6 +173,35 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify({ products, gabbaiPhones, pin, yemotToken, announcement, discountRule }) };
   }
 
+  // ── GET: בדיקת חיבור אמיתית מול השרת של ימות המשיח (לא רק בדיקת הפונקציה שלנו) ──
+  // שימוש: /.netlify/functions/ivr?step=test_yemot&secret=הסוד_שלך
+  if (q.step === 'test_yemot') {
+    if ((q.secret || '') !== SECRET) return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) };
+    const token = (await kvGet('ivr:yemot_token')) || process.env.YEMOT_TOKEN || '';
+    if (!token) {
+      return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify({ connected: false, error: 'לא הוגדר טוקן של ימות המשיח (לא באתר ולא ב-Netlify)' }) };
+    }
+    try {
+      const testPath = 'ivr2:2/9/2/000.tts'; // כותב לתוך שלוחת ה"הודעה" — קובץ בדיקה זעיר, לא פוגע בכלום
+      const apiUrl = 'https://www.call2all.co.il/ym/api/UploadTextFile';
+      const body = 'token=' + encodeURIComponent(token) + '&what=' + encodeURIComponent(testPath) + '&contents=' + encodeURIComponent('בדיקת חיבור ממערכת בית הכנסת');
+      const r = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+      const j = await r.json();
+      const connected = j.responseStatus === 'OK';
+      return {
+        statusCode: 200,
+        headers: { ...headers, 'Content-Type': 'application/json; charset=utf-8' },
+        body: JSON.stringify({
+          connected,
+          message: connected ? '✓ החיבור לימות המשיח תקין — הטוקן עובד' : '✗ ימות המשיח דחה את הבקשה — בדוק שהטוקן נכון',
+          yemotRawResponse: j,
+        }),
+      };
+    } catch (e) {
+      return { statusCode: 200, headers: { ...headers, 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify({ connected: false, error: e.message }) };
+    }
+  }
+
   // ── כל שאר הבקשות = קריאות מ-ימות המשיח בזמן שיחה חיה ────────────────────
   const phone = normalizePhone(q.ApiPhone || q.phone || '');
   const step = q.step || 'menu';
