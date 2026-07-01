@@ -1,44 +1,86 @@
-// api/nedarim.js
+// netlify/functions/nedarim.js
 // Proxy server עבור נדרים פלוס — עוקף בעיית CORS
-// פועל כ-Vercel Serverless Function
+// פועל כ-Netlify Function
+//
+// פרוקסי כללי שתומך בכל פעולות ה-API המתועדות של נדרים פלוס.
+// הקליינט שולח: { base: 'manage'|'masav'|'tamal', action: 'GetKevaNew', method: 'GET'|'POST', params: {...} }
+// ApiPassword/MosadNumber נכנסים תמיד בתוך params.
+//
+// (ApiPassword הוא קוד אימות ייעודי ל-API שיש לבקש ממשרד נדרים פלוס office@nedar.im
+//  — הוא שונה מהסיסמה הרגילה להתחברות לקופה!)
 
-export default async function handler(req, res) {
-  // אפשור CORS לאתר שלך בלבד (אפשר להחליף ל-domain ספציפי לאבטחה טובה יותר)
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+const BASE_URLS = {
+  manage: 'https://matara.pro/nedarimplus/Reports/Manage3.aspx',   // הוראות קבע אשראי, היסטוריה, ביטולים, הכנסות חיצוניות
+  masav:  'https://matara.pro/nedarimplus/Reports/Masav3.aspx',     // הוראות קבע בנקאיות (מס"ב)
+  tamal:  'https://matara.pro/nedarimplus/Reports/Tamal3.aspx',     // הפקת/ביטול קבלות
+};
 
-  // בקשת preflight של הדפדפן
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+exports.handler = async (event) => {
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers, body: '' };
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'רק בקשות POST מותרות' });
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      headers,
+      body: JSON.stringify({ error: 'רק בקשות POST מותרות' }),
+    };
   }
 
   try {
-    const { mosadId, apiValid, task } = req.body;
+    const body = JSON.parse(event.body || '{}');
 
-    if (!mosadId || !apiValid) {
-      return res.status(400).json({ error: 'חסר מספר קופה או סיסמה' });
+    // תאימות לאחור: קריאה ישנה בלי base/action -> משיכת הוראות קבע (ברירת מחדל)
+    const base = body.base || 'manage';
+    const action = body.action || 'GetKevaNew';
+    const method = (body.method || 'GET').toUpperCase();
+    const params = body.params || {
+      MosadNumber: body.mosadNumber,
+      ApiPassword: body.apiPassword,
+    };
+
+    if (!params.MosadNumber && !params.MosadId) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'חסר מספר מוסד' }) };
+    }
+    if (!params.ApiPassword && !params.ApiValid) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'חסר סיסמת API' }) };
     }
 
-    // בניית הבקשה לנדרים פלוס
-    const params = new URLSearchParams();
-    params.append('MosadId', mosadId);
-    params.append('ApiValid', apiValid);
-    params.append('Task', task || 'GetAllActiveDD');
+    const baseUrl = BASE_URLS[base];
+    if (!baseUrl) {
+      return { statusCode: 400, headers, body: JSON.stringify({ error: 'base לא מוכר: ' + base }) };
+    }
 
-    const ndpResponse = await fetch('https://www.matara.pro/nedarimplus/online/api.aspx', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString(),
-    });
+    let ndpResponse;
+    if (method === 'GET') {
+      const url = new URL(baseUrl);
+      url.searchParams.append('Action', action);
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') url.searchParams.append(k, v);
+      });
+      ndpResponse = await fetch(url.toString(), { method: 'GET' });
+    } else {
+      const formParams = new URLSearchParams();
+      formParams.append('Action', action);
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') formParams.append(k, v);
+      });
+      ndpResponse = await fetch(baseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formParams.toString(),
+      });
+    }
 
     const text = await ndpResponse.text();
 
-    // נדרים פלוס מחזירים לפעמים JSON ולפעמים XML/טקסט תלוי בהגדרות הקופה
     let data;
     try {
       data = JSON.parse(text);
@@ -46,9 +88,17 @@ export default async function handler(req, res) {
       data = { raw: text };
     }
 
-    return res.status(200).json({ success: true, data });
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({ success: true, data }),
+    };
   } catch (err) {
     console.error('NDP proxy error:', err);
-    return res.status(500).json({ error: 'שגיאת שרת בעת חיבור לנדרים פלוס', details: err.message });
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'שגיאת שרת בעת חיבור לנדרים פלוס', details: err.message }),
+    };
   }
-}
+};
