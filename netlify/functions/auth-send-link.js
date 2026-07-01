@@ -22,10 +22,27 @@ exports.handler = async (event) => {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'חסר מייל' }) };
     }
 
+    const normalizedEmail = String(email).trim().toLowerCase();
     const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
+    // בדיקת רשימת המיילים המורשים — שולחים קישור התחברות רק אם המייל ברשימה
+    const { data: allowedRow, error: allowedErr } = await supabase
+      .from('allowed_emails')
+      .select('email')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+
+    if (allowedErr) throw allowedErr;
+    if (!allowedRow) {
+      return {
+        statusCode: 403,
+        headers,
+        body: JSON.stringify({ error: 'כתובת המייל הזו אינה מורשית להתחבר. פנה למנהל המערכת כדי שיוסיף אותך לרשימה.' }),
+      };
+    }
+
     const { error } = await supabase.auth.signInWithOtp({
-      email,
+      email: normalizedEmail,
       options: { emailRedirectTo: redirectTo || process.env.SITE_URL },
     });
 
